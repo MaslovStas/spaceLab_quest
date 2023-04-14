@@ -25,7 +25,7 @@ class Field:
 
     @has_key.setter
     def has_key(self, value):
-        """При добавлении или удалении ключа к полю будет изменяться локация ключа на поле для сохранения"""
+        """При добавлении или удалении ключа к полю будет изменяться локация ключа на поле для сохранения в файл"""
         self.board.key_location = self.position if value else None
         self._has_key = value
 
@@ -42,17 +42,27 @@ class Field:
         """Эффект поля на игрока в зависимости от того горит ли поле"""
         if self.is_fire:
             player.hurt()
-            print('Герой получает урон от огня!')
+            print(f'{player} получает урон от огня!')
 
     def player_enters(self, player):
-        self.players.append(player)
         # если текущая позиция игрока уже не пустая, то это движение игрока, а не инициализация его на карте
         if player.current_field:
+            self.status_field(player)
             player.current_field.player_leaves(player)  # очищаем клетку, с которой игрок уходит
             self.effect_on_player(player)  # воздействуем на игрока
 
+        self.players.append(player)
+
     def player_leaves(self, player):
         self.players.remove(player)
+
+    def status_field(self, player):
+        status = f'{player} заходит на поле {self.position}.'
+        if self.players:
+            status += ' Здесь уже есть такие герои - ' + ", ".join([str(player) for player in self.players]) + '.'
+        if self.has_key:
+            status += ' Вы видите ключ.'
+        print(status)
 
 
 class Wall(Field):
@@ -63,7 +73,7 @@ class Wall(Field):
 
     def player_enters(self, player):
         player.hurt()
-        print('Герой ударился о стену!')
+        print(f'{player} ударился о стену!')
 
     def __repr__(self):
         return 'W'
@@ -75,7 +85,7 @@ class Altar(Field):
     def effect_on_player(self, player):
         super().effect_on_player(player)
         player.full_recovered()
-        print('О чудо! Герой нашёл алтарь и здоровье полностью восстановлено!')
+        print(f'О чудо! {player} нашёл алтарь и его здоровье полностью восстановлено!')
 
     def __repr__(self):
         return 'A'
@@ -87,10 +97,10 @@ class Golem(Field):
     def effect_on_player(self, player):
         super().effect_on_player(player)
         if player.has_key:
-            print('Герой победил!')
+            print(f'Поздравляем! Герой {player.name} преодолел все препятствия и победил!')
             player.is_win = True
         else:
-            print('У Героя нет ключа!')
+            print(f'У {player} нет ключа!')
             player.die()
 
     def __repr__(self):
@@ -122,7 +132,8 @@ class Board:
             self.board[key_field].has_key = True
         # Зажжение полей, если переданы при загрузке ранее сохраненной игры
         if burning_fields:
-            for pos in burning_fields:
+            self.burning_fields = burning_fields
+            for pos in self.burning_fields:
                 self.board[pos].is_fire = True
 
     def create_board(self, original_board, orange_fields):
@@ -142,7 +153,7 @@ class Board:
         self.burning_fields = np.random.choice(white_fields, size=4, replace=False)
         for field in white_fields:
             field.is_fire = field in self.burning_fields
-        print('Загорелись следующие поля:', ', '.join(str(field.position) for field in self.burning_fields))
+        print('Загорелись следующие поля: ' + ', '.join(str(field.position) for field in self.burning_fields) + '.')
 
     def __getitem__(self, index: tuple):
         return self.board[index]
@@ -175,18 +186,20 @@ class Player:
         self.has_key = has_key
         self.is_win = False
 
+    def __str__(self):
+        return f'Герой {self.name}'
+
     @property
     def current_field(self):
         return self._current_field
 
     @current_field.setter
     def current_field(self, field):
-
         field.player_enters(self)
 
         if field == self.previous_field:
             self.die()
-            print('Герой струсил и убежал!')
+            print(f'{self} струсил и убежал!')
 
         if field.is_available:  # изменять локацию игрока, если в клетку разрешен вход
             # проверяем это инициализация или передвижение игрока и какого цвета новая клетка
@@ -199,14 +212,11 @@ class Player:
         self.number_of_actions -= value
 
     def move(self, field):
-        if self.previous_field == field:  # Убежал
-            self.die()
-
         self.current_field = field
         self.spend_action()
 
     def strike(self, other):
-        print(f'Герой ударил Героя {other.name}')
+        print(f'{self} ударил Героя {other.name}')
         other.hurt()
 
     def strike_all_in_the_field(self):
@@ -228,7 +238,7 @@ class Player:
             self.current_field.has_key = False
 
             self.spend_action()
-            print(f'Герой находит ключ!')
+            print(f'{self} находит ключ!')
         else:
             print('А брать-то нечего!')
 
@@ -243,7 +253,7 @@ class Player:
             self.health = min(self.health + 1, self.MAX_HEALTH)
 
             self.spend_action()
-            print(f'Герой полечился, жизней - {self.health},  аптечек - {self.number_of_medicine}.')
+            print(f'{self} полечился, жизней - {self.health},  аптечек - {self.number_of_medicine}.')
         else:
             print('У вас нет аптечек!')
 
@@ -288,15 +298,15 @@ class Game:
 
     @staticmethod
     def greet():
-        print('-' * 90)
-        print('{:^90s}'.format('Добро пожаловать'))
-        print('{:^90s}'.format('в игру'))
-        print('{:^90s}'.format('"Тайны Подземелья"'))
-        print('-' * 90)
+        print('-' * 100)
+        print('{:^100s}'.format('Добро пожаловать'))
+        print('{:^100s}'.format('в игру'))
+        print('{:^100s}'.format('"Тайны Подземелья"'))
+        print('-' * 100)
         print('Правила игры: Первым добраться до голема и с помощью ключа покинуть локацию.')
-        print('Доступные команды: "Вверх", "Вниз", "Влево", "Вправо", "Ударить", "Лечиться", "Взять".')
+        print('Доступные команды: "Вверх", "Вниз", "Влево", "Вправо", "Ударить", "Лечить", "Взять".')
         print('Также Вы в любой момент можете сохранить весь прогресс и выйти из игры с помощью команды: "Сохранить".')
-        print('-' * 90)
+        print('-' * 100)
 
     def creating_game(self):
         try:
@@ -306,16 +316,15 @@ class Game:
             if input('Если Вы хотите загрузить игру, введите "Да", иначе будет запущена Новая игра: ').lower() == 'да':
                 self.load_game(save)
             else:
-                open('save.json', 'w').close()
                 self.new_game()
 
         except (FileNotFoundError, JSONDecodeError):
             self.new_game()
+        finally:
+            open('save.json', 'w').close()
 
     def new_game(self):
-        print('Создание карты...')
         self.board = Board(self.ORIGINAL_BOARD, self.ORANGE_FIELDS, self.KEY_FIELD)
-        print('Создание игроков...')
         self.creating_players()
 
     def load_game(self, save):
@@ -354,6 +363,9 @@ class Game:
     def turn(self, player):
         while player.number_of_actions:  # Пока игрок не потратит действия
             self.check_health(player)  # проверка жизней до хода
+
+            if player.current_field.has_key:
+                print(f'{player} может поднять ключ!')
 
             move_directions = {'вверх': (-1, 0), 'вниз': (1, 0), 'влево': (0, -1), 'вправо': (0, 1)}
             actions_player = {'ударить': player.strike_all_in_the_field,
@@ -404,12 +416,11 @@ class Game:
     def loop(self):
         while self.players:
             print('-' * 20)
-            for player in self.players:
+            for player in self.players[:]:
                 print(self.board)
                 self.turn(player)
 
                 if player.is_win:
-                    print(f'Поздравляем! Герой {player.name} преодолел все препятствия и победил!')
                     return
 
             self.end_of_round()
