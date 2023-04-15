@@ -15,9 +15,9 @@ class Field:
 
     def __init__(self, board, position: tuple, is_white=True, is_available=True):
         """
-        :param board: Ссылка на доску, которой принадлежит поле;
-        :param position: Координаты доски, где располагается поле;
-        :param is_white: Является ли поле белым, влияет на запись предыдущего поля и зажжение поля;
+        :param board: Ссылка на доску, которой принадлежит поле.
+        :param position: Координаты доски, где располагается поле.
+        :param is_white: Является ли поле белым, влияет на запись предыдущего поля и зажжение поля.
         :param is_available: Является ли поле доступным для перехода.
         """
         self.board = board
@@ -66,7 +66,7 @@ class Field:
     def status_field(self, player):
         status = f'{player} заходит на поле {self.position}.'
         if self.players:
-            status += ' Здесь уже есть такие герои - ' + ", ".join([str(player) for player in self.players]) + '.'
+            status += ' Здесь уже есть следующие герои - ' + ", ".join([str(player) for player in self.players]) + '.'
         if self.has_key:
             status += ' Вы видите ключ.'
         logging.info(status)
