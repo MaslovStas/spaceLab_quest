@@ -98,7 +98,7 @@ class Golem(Field):
     def effect_on_player(self, player):
         super().effect_on_player(player)
         if player.has_key:
-            logging.info(f'\nПоздравляем! Герой {player.name} преодолел все препятствия и победил!')
+            logging.info(f'\nПоздравляем! {player} преодолел все препятствия и победил!')
             player.is_win = True
         else:
             logging.info(f'{player} нашел Голема, но у него нет ключа!')
@@ -449,7 +449,7 @@ class Game:
         player.drop_key()
         player.current_field.player_leaves(player)
         self.players.remove(player)
-        logging.info(f'Герой {player.name} выводится из игры...')
+        logging.info(f'{player} выводится из игры...')
 
     def end_of_round(self):
         """Функция вызывается в конце раунда для восстановления возможности ходить игрокам и зажжению огня на 4-х
