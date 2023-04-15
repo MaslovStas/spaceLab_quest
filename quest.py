@@ -1,6 +1,6 @@
 import json
 import logging
-import sys  # импорт библиотеки sys для логирования в консоль, так как по умолчанию в sys.stderr
+import sys  # импорт библиотеки sys для логирования в консоль, так как по умолчанию происходит в sys.stderr
 from json import JSONDecodeError
 
 import numpy as np
@@ -42,15 +42,6 @@ class Field:
         self.board.key_location = self.position if value else None
         self._has_key = value
 
-    def __repr__(self):
-        if self.is_fire:
-            return 'F'
-        if self.has_key:
-            return 'K'
-        if self.players:
-            return f'{self.players[0].health}'
-        return '0'
-
     def effect_on_player(self, player):
         """Эффект поля на игрока в зависимости от того горит ли поле, в дальнейшем будет суммироваться с эффектами
         других полей"""
@@ -91,20 +82,14 @@ class Wall(Field):
         player.hurt()
         logging.info(f'{player} ударился о стену!')
 
-    def __repr__(self):
-        return 'W'
-
 
 class Altar(Field):
     """Поле с алтарём, который полностью восстанавливает здоровье"""
 
     def effect_on_player(self, player):
         super().effect_on_player(player)
-        player.full_recovered()
-        logging.info(f'О чудо! {player} нашёл алтарь и его здоровье полностью восстановлено!')
-
-    def __repr__(self):
-        return 'A'
+        player.full_recovery()
+        logging.info(f'О чудо! {player} находит Алтарь и он полностью исцелён!')
 
 
 class Golem(Field):
@@ -113,14 +98,11 @@ class Golem(Field):
     def effect_on_player(self, player):
         super().effect_on_player(player)
         if player.has_key:
-            logging.info(f'Поздравляем! Герой {player.name} преодолел все препятствия и победил!')
+            logging.info(f'\nПоздравляем! Герой {player.name} преодолел все препятствия и победил!')
             player.is_win = True
         else:
-            logging.info(f'У {player} нет ключа!')
+            logging.info(f'{player} нашел Голема, но у него нет ключа!')
             player.die()
-
-    def __repr__(self):
-        return 'G'
 
 
 class EmptySpace(Field):
@@ -129,9 +111,6 @@ class EmptySpace(Field):
 
     def __init__(self, board, position):
         super().__init__(board, position, is_white=False)
-
-    def __repr__(self):
-        return ' '
 
 
 class Board:
@@ -150,7 +129,19 @@ class Board:
         self.key_location = None
         self.burning_fields = []
 
-        self.create_board(original_board, orange_fields)
+        self.create_board(original_board, orange_fields, key_field, burning_fields)
+
+    def create_board(self, original_board, orange_fields, key_field, burning_fields):
+        """Конвертация текстовой карты в карту с объектами полей, огнями и ключом"""
+        width, height = len(original_board[0]), len(original_board)
+        self.board = np.empty(shape=(height, width), dtype=object)
+
+        for i in range(height):
+            for j in range(width):
+                self.SYMBOLS[original_board[i][j]](self, position=(i, j))
+
+        for pos in orange_fields:
+            self.board[pos].is_white = False
 
         if key_field:
             self.board[key_field].has_key = True
@@ -162,18 +153,6 @@ class Board:
                 self.burning_fields.append(field)
             logging.info(
                 'Горят следующие поля: ' + ', '.join(str(field.position) for field in self.burning_fields) + '.')
-
-    def create_board(self, original_board, orange_fields):
-        """Конвертация текстовой карты в карту с объектами полей"""
-        width, height = len(original_board[0]), len(original_board)
-        self.board = np.empty(shape=(height, width), dtype=object)
-
-        for i in range(height):
-            for j in range(width):
-                self.SYMBOLS[original_board[i][j]](self, position=(i, j))
-
-        for pos_x, pos_y in orange_fields:
-            self.board[pos_x, pos_y].is_white = False
 
     def burn(self):
         """В конце раунда случайно только из белых полей загораются 4 поля"""
@@ -190,12 +169,9 @@ class Board:
     def __setitem__(self, key, value):
         self.board[key] = value
 
-    def __str__(self):
-        return str(self.board)
-
     @property
     def to_json(self) -> dict:
-        """Создание словаря для записи в json"""
+        """Создание словаря для записи статуса доски в json"""
         return dict(burning_fields=[field.position for field in self.burning_fields],
                     key_location=self.key_location)
 
@@ -242,8 +218,8 @@ class Player:
         движение игрока и новое поле белого цвета"""
         if field in self.previous_fields:
             self.die()
-            print(f'{self} струсил и убежал!')
             self.is_escaped = True
+            logging.info(f'{self} струсил и убежал!')
             return
 
         field.player_enters(self)
@@ -311,11 +287,11 @@ class Player:
             self.health = min(self.health + 1, self.MAX_HEALTH)
 
             self.spend_action()
-            logging.info(f'{self} полечился, жизней - {self.health},  аптечек - {self.number_of_medicine}.')
+            logging.info(f'{self} полечился.')
         else:
             logging.info('У вас нет аптечек!')
 
-    def full_recovered(self):
+    def full_recovery(self):
         """Полное восстановление здоровья"""
         self.health = self.MAX_HEALTH
 
@@ -329,7 +305,7 @@ class Player:
 
     @property
     def to_json(self) -> dict:
-        """Создание словаря для записи в json"""
+        """Создание словаря для записи статуса игрока в json"""
         return dict(name=self.name,
                     health=self.health,
                     previous_fields=[field.position
@@ -369,13 +345,17 @@ class Game:
         print('{:^100s}'.format('"Тайны Подземелья"'))
         print('-' * 100)
         print('Правила игры: Первым добраться до голема и с помощью ключа покинуть локацию.')
+        print('Возврат на предыдущую клетку, если Вы вернулись не с оранжевой клетки означает бегство.')
+        print('На оранжевую клетку можно зайти лишь 1 раз.')
+        print('Ход пропускать нельзя, у вас имеется 3 аптечки. При столкновении со стеной получаете урон.')
+        print('При нанесении удара по противникам, получают урон все Герои, находящиеся в этой клетке.')
         print('Доступные команды: "вверх", "вниз", "влево", "вправо", "ударить", "лечить", "взять".')
         print('Также Вы в любой момент можете сохранить весь прогресс и выйти из игры с помощью команды: "сохранить".')
         print('-' * 100)
 
     def creating_game(self):
         """При наличии файла сохраненной игры и успешной попытки декодирования данных, игроку предлагается загрузить
-        игру. При отказе создается новая игра. Также по-умолчанию файл сохраненной игры всегда обнуляется."""
+        игру. При отказе создается новая игра. Также по умолчанию файл сохраненной игры всегда обнуляется."""
         try:
             with open('save.json') as f:
                 save = json.load(f)
@@ -419,7 +399,7 @@ class Game:
             self.players.append(player_load)
 
     def creating_players(self):
-        """Создание игроков, размещение их на стартовой позиции поля и добавление в список"""
+        """Создание игроков, размещение их на стартовой позиции поля и добавление в общий список игроков"""
         while True:
             answer = input('Введите количество игроков: ')
             if not answer.isdigit():
@@ -439,14 +419,16 @@ class Game:
         while player.number_of_actions and player.is_alive:
 
             if player.current_field.has_key:
-                logging.info(f'{player} может поднять ключ!')
+                logging.info(f'{player} может взять ключ!')
 
             move_directions = {'вверх': (-1, 0), 'вниз': (1, 0), 'влево': (0, -1), 'вправо': (0, 1)}
             actions = {'ударить': player.strike_all_in_the_field,
                        'взять': player.take_key,
                        'лечить': player.heal,
                        'сохранить': self.save}
-            action = input(f'{player}, Ваш ход: ').lower()
+            action = input(
+                f'{player}, у Вас жизней - {player.health} и аптечек - {player.number_of_medicine}. Ваши действия: '
+            ).lower()
             if action in move_directions:
                 dx, dy = move_directions[action]
                 pos_x, pos_y = player.current_field.position
@@ -493,14 +475,12 @@ class Game:
         while self.players:
             print('-' * 100)
             for player in self.players[:]:
-                print(self.board)
                 self.turn(player)
-
+                print()
                 if player.is_win:
                     return
 
             self.end_of_round()
-
         print('\nКонец игры. Игроков больше нет!')
 
 
