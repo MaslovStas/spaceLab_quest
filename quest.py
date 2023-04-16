@@ -31,6 +31,14 @@ class Field:
 
         self.board[position] = self
 
+    def __str__(self):
+        status = f'Вы заходите на поле {self.position}.'
+        if self.players:
+            status += ' Здесь уже есть следующие герои - ' + ", ".join([str(player) for player in self.players]) + '.'
+        if self.has_key:
+            status += ' Вы видите ключ.'
+        return status
+
     @property
     def has_key(self):
         """Лежит ли на поле ключ"""
@@ -54,7 +62,7 @@ class Field:
         а не инициализация его на карте. При этом кроме добавления игрока в список игроков этого поля происходит
         очищение поля, с которого игрок уходит и воздействие эффектов поля на игрока"""
         if player.current_field:
-            self.status_field(player)
+            logging.info(self)
             player.current_field.player_leaves(player)
             self.effect_on_player(player)
 
@@ -62,14 +70,6 @@ class Field:
 
     def player_leaves(self, player):
         self.players.remove(player)
-
-    def status_field(self, player):
-        status = f'{player} заходит на поле {self.position}.'
-        if self.players:
-            status += ' Здесь уже есть следующие герои - ' + ", ".join([str(player) for player in self.players]) + '.'
-        if self.has_key:
-            status += ' Вы видите ключ.'
-        logging.info(status)
 
 
 class Wall(Field):
@@ -98,7 +98,7 @@ class Golem(Field):
     def effect_on_player(self, player):
         super().effect_on_player(player)
         if player.has_key:
-            logging.info(f'\nПоздравляем! {player} преодолел все препятствия и победил!')
+            logging.info(f'{player} нашел Голема и открывает его ключом!')
             player.is_win = True
         else:
             logging.info(f'{player} нашел Голема, но у него нет ключа!')
@@ -134,21 +134,21 @@ class Board:
     def create_board(self, original_board, orange_fields, key_field, burning_fields):
         """Конвертация текстовой карты в карту с объектами полей, огнями и ключом"""
         width, height = len(original_board[0]), len(original_board)
-        self.board = np.empty(shape=(height, width), dtype=object)
+        self.fields = np.empty(shape=(height, width), dtype=object)
 
         for i in range(height):
             for j in range(width):
                 self.SYMBOLS[original_board[i][j]](self, position=(i, j))
 
         for pos in orange_fields:
-            self.board[pos].is_white = False
+            self.fields[pos].is_white = False
 
         if key_field:
-            self.board[key_field].has_key = True
+            self.fields[key_field].has_key = True
 
         if burning_fields:
             for pos in burning_fields:
-                field = self.board[pos]
+                field = self.fields[pos]
                 field.is_fire = True
                 self.burning_fields.append(field)
             logging.info(
@@ -156,7 +156,7 @@ class Board:
 
     def burn(self):
         """В конце раунда случайно только из белых полей загораются 4 поля"""
-        white_fields = [field for field in self.board.flatten() if field.is_white]
+        white_fields = [field for field in self.fields.flatten() if field.is_white]
         self.burning_fields = np.random.choice(white_fields, size=4, replace=False)
         for field in white_fields:
             field.is_fire = field in self.burning_fields
@@ -164,10 +164,10 @@ class Board:
             'Загорелись следующие поля: ' + ', '.join(str(field.position) for field in self.burning_fields) + '.')
 
     def __getitem__(self, index: tuple):
-        return self.board[index]
+        return self.fields[index]
 
     def __setitem__(self, key, value):
-        self.board[key] = value
+        self.fields[key] = value
 
     @property
     def to_json(self) -> dict:
@@ -478,6 +478,7 @@ class Game:
                 self.turn(player)
                 print()
                 if player.is_win:
+                    logging.info(f'Поздравляем! {player} преодолел все препятствия и победил!')
                     return
 
             self.end_of_round()
