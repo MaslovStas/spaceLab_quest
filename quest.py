@@ -1,6 +1,6 @@
 import json
 import logging
-import sys  # импорт библиотеки sys для логирования в консоль, так как по умолчанию происходит в sys.stderr
+import sys  # импорт библиотеки sys для логирования в sys.stdout, так как по умолчанию происходит в sys.stderr
 from json import JSONDecodeError
 
 import numpy as np
